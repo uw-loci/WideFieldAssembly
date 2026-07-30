@@ -8,6 +8,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "PartInfo.h"
+#include "Components/ActorComponent.h"
 AModelLevelManager::AModelLevelManager()
 {
     PrimaryActorTick.bCanEverTick = true;
@@ -17,51 +18,71 @@ void AModelLevelManager::BeginPlay()
 {
     Super::BeginPlay();
 
-    GetWorldTimerManager().SetTimerForNextTick(
-        this,
-        &AModelLevelManager::HideAllLasers
-    );
+    APlayerController* PC =
+        UGameplayStatics::GetPlayerController(this, 0);
 
-    EnableInput(UGameplayStatics::GetPlayerController(this, 0));
-
-    if (InputComponent)
+    if (!PC)
     {
-        InputComponent->BindAction(
-            "Laser Emit",
-            IE_Pressed,
-            this,
-            &AModelLevelManager::ToggleLaser
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT("ModelLevelManager BeginPlay: PlayerController is null")
         );
 
-        FInputKeyBinding& LeftMouseBinding = InputComponent->BindKey(
+        return;
+    }
+
+    EnableInput(PC);
+
+    if (!InputComponent)
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT("ModelLevelManager BeginPlay: InputComponent is null")
+        );
+
+        return;
+    }
+
+    InputComponent->BindKey(
+        EKeys::L,
+        IE_Pressed,
+        this,
+        &AModelLevelManager::ToggleLaser
+    );
+
+    FInputKeyBinding& LeftMouseBinding =
+        InputComponent->BindKey(
             EKeys::LeftMouseButton,
             IE_Pressed,
             this,
             &AModelLevelManager::ShowPartInfo
         );
 
-        LeftMouseBinding.bConsumeInput = false;
+    LeftMouseBinding.bConsumeInput = false;
 
-        InputComponent->BindKey(
-            EKeys::Escape,
-            IE_Pressed,
-            this,
-            &AModelLevelManager::TogglePauseMenu
-        );
+    InputComponent->BindKey(
+        EKeys::Escape,
+        IE_Pressed,
+        this,
+        &AModelLevelManager::TogglePauseMenu
+    );
 
-        InputComponent->BindKey(
-            EKeys::M,
-            IE_Pressed,
-            this,
-            &AModelLevelManager::TogglePauseMenu
-        );
-    }
+    InputComponent->BindKey(
+        EKeys::M,
+        IE_Pressed,
+        this,
+        &AModelLevelManager::TogglePauseMenu
+    );
+
     if (TipsWidgetClass)
     {
-        TipsWidget = CreateWidget<UUserWidget>(
-            GetWorld(),
-            TipsWidgetClass
-        );
+        TipsWidget =
+            CreateWidget<UUserWidget>(
+                GetWorld(),
+                TipsWidgetClass
+            );
 
         if (TipsWidget)
         {
@@ -69,6 +90,27 @@ void AModelLevelManager::BeginPlay()
         }
     }
 
+    FTimerHandle InitialLaserTimer;
+
+    GetWorldTimerManager().SetTimer(
+        InitialLaserTimer,
+        this,
+        &AModelLevelManager::HideAllLasers,
+        0.2f,
+        false
+    );
+
+    UE_LOG(
+        LogTemp,
+        Warning,
+        TEXT(
+            "ModelLevelManager BeginPlay completed. "
+            "LaserClass=%s"
+        ),
+        LaserClass
+        ? *LaserClass->GetName()
+        : TEXT("NULL")
+    );
 }
 
 void AModelLevelManager::Tick(float DeltaTime)
@@ -165,38 +207,75 @@ void AModelLevelManager::UnhoverActor(AActor* OldActor)
 
 void AModelLevelManager::HideAllLasers()
 {
-    if (!LaserClass) return;
+
+    const int32 DeactivateCalls =
+        CallLaserEmitterFunction(
+            TEXT("DeactiveLaser")
+        );
+
+
+    ShutdownRemainingLasers();
+
+    bLaserPressed = false;
+
+    UE_LOG(
+        LogTemp,
+        Warning,
+        TEXT(
+            "HideAllLasers completed: "
+            "DeactiveCalls=%d"
+        ),
+        DeactivateCalls
+    );
+}
+void AModelLevelManager::ToggleLaser()
+{
+    if (bLaserPressed)
+    {
+
+        HideAllLasers();
+        return;
+    }
+
+    const int32 ActivateCalls =
+        CallLaserEmitterFunction(
+            TEXT("ActivateLaser")
+        );
 
     TArray<AActor*> Lasers;
-    UGameplayStatics::GetAllActorsOfClass(this, LaserClass, Lasers);
+
+    if (LaserClass)
+    {
+        UGameplayStatics::GetAllActorsOfClass(
+            this,
+            LaserClass,
+            Lasers
+        );
+    }
 
     for (AActor* Laser : Lasers)
     {
-        if (Laser)
+        if (!IsValid(Laser))
         {
-            Laser->SetActorHiddenInGame(true);
+            continue;
         }
+
+        Laser->SetActorHiddenInGame(false);
+        Laser->SetActorTickEnabled(true);
     }
 
     bLaserPressed = true;
-}
 
-void AModelLevelManager::ToggleLaser()
-{
-    if (!LaserClass) return;
-
-    TArray<AActor*> Lasers;
-    UGameplayStatics::GetAllActorsOfClass(this, LaserClass, Lasers);
-
-    for (AActor* Laser : Lasers)
-    {
-        if (Laser)
-        {
-            Laser->SetActorHiddenInGame(!bLaserPressed);
-        }
-    }
-
-    bLaserPressed = !bLaserPressed;
+    UE_LOG(
+        LogTemp,
+        Warning,
+        TEXT(
+            "ToggleLaser ON: "
+            "ActivateCalls=%d LasersAfterActivate=%d"
+        ),
+        ActivateCalls,
+        Lasers.Num()
+    );
 }
 
 void AModelLevelManager::ShowPartInfo()
@@ -328,4 +407,154 @@ void AModelLevelManager::ClosePartInfo()
         CurrentPartInfoWidget->RemoveFromParent();
         CurrentPartInfoWidget = nullptr;
     }
+}
+int32 AModelLevelManager::CallLaserEmitterFunction(
+    FName FunctionName
+)
+{
+    if (!LaserEmitterClass)
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT(
+                "CallLaserEmitterFunction failed: "
+                "LaserEmitterClass is null"
+            )
+        );
+
+        return 0;
+    }
+
+    TArray<AActor*> Emitters;
+
+    UGameplayStatics::GetAllActorsOfClass(
+        this,
+        LaserEmitterClass,
+        Emitters
+    );
+
+    int32 FunctionCallCount = 0;
+
+    for (AActor* EmitterActor : Emitters)
+    {
+        if (!IsValid(EmitterActor))
+        {
+            continue;
+        }
+
+        if (
+            UFunction* ActorFunction =
+            EmitterActor->FindFunction(FunctionName)
+            )
+        {
+            EmitterActor->ProcessEvent(
+                ActorFunction,
+                nullptr
+            );
+
+            ++FunctionCallCount;
+        }
+
+        TInlineComponentArray<UActorComponent*> Components;
+
+        EmitterActor->GetComponents(Components);
+
+        for (UActorComponent* Component : Components)
+        {
+            if (!IsValid(Component))
+            {
+                continue;
+            }
+
+            UFunction* ComponentFunction =
+                Component->FindFunction(FunctionName);
+
+            if (!ComponentFunction)
+            {
+                continue;
+            }
+
+            Component->ProcessEvent(
+                ComponentFunction,
+                nullptr
+            );
+
+            ++FunctionCallCount;
+
+            UE_LOG(
+                LogTemp,
+                Warning,
+                TEXT(
+                    "Called %s on Component=%s Owner=%s"
+                ),
+                *FunctionName.ToString(),
+                *Component->GetName(),
+                *EmitterActor->GetName()
+            );
+        }
+    }
+
+    UE_LOG(
+        LogTemp,
+        Warning,
+        TEXT(
+            "CallLaserEmitterFunction: "
+            "Function=%s EmitterActors=%d FunctionCalls=%d"
+        ),
+        *FunctionName.ToString(),
+        Emitters.Num(),
+        FunctionCallCount
+    );
+
+    return FunctionCallCount;
+}
+
+void AModelLevelManager::ShutdownRemainingLasers()
+{
+    if (!LaserClass)
+    {
+        return;
+    }
+
+    TArray<AActor*> Lasers;
+
+    UGameplayStatics::GetAllActorsOfClass(
+        this,
+        LaserClass,
+        Lasers
+    );
+
+    for (AActor* Laser : Lasers)
+    {
+        if (!IsValid(Laser))
+        {
+            continue;
+        }
+
+        if (
+            UFunction* ShutdownFunction =
+            Laser->FindFunction(TEXT("ShutdownLaser"))
+            )
+        {
+            Laser->ProcessEvent(
+                ShutdownFunction,
+                nullptr
+            );
+        }
+
+        if (IsValid(Laser))
+        {
+            Laser->Destroy();
+        }
+    }
+
+    UE_LOG(
+        LogTemp,
+        Warning,
+        TEXT(
+            "ShutdownRemainingLasers: InitialCount=%d"
+        ),
+        Lasers.Num()
+    );
 }

@@ -76,5 +76,11 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void ClosePartInfo();
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser")
+	TSubclassOf<AActor> LaserEmitterClass;
 
+private:
+	int32 CallLaserEmitterFunction(FName FunctionName);
+
+	void ShutdownRemainingLasers();
 };
