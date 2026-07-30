@@ -78,7 +78,7 @@ git lfs install
 Choose a folder where you want to store the project, and run:
 
 ```bat
-cd D:\Wide_field_unreal_project
+cd "your file location"
 git clone https://github.com/uw-loci/WideFieldAssembly.git
 cd WideFieldAssembly
 ```
