@@ -61,15 +61,64 @@ The main menu provides access to the following sections:
 
 ## How to Run the Project
 
-### From Unreal Engine
+## From Unreal Engine
 
-1. Clone or download this repository.
-2. Open the project folder.
-3. Double-click the `.uproject` file.
-4. Allow Unreal Engine to compile shaders or project files if prompted.
+This project uses **Git Large File Storage (Git LFS)** for Unreal Engine assets such as `.umap` and `.uasset` files. Do not use GitHub's **Download ZIP** option unless the repository archive is configured to include Git LFS objects. A normal ZIP download may contain only LFS pointer files, which can cause Unreal Engine to display errors such as `Failed to load map` or `appears to be an asset file`.
+
+### 1. Install Git and Git LFS
+
+Install Git and Git LFS on your computer. Then open Command Prompt or PowerShell and run:
+
+```bat
+git lfs install
+```
+
+### 2. Clone the Repository
+
+Choose a folder where you want to store the project, and run:
+
+```bat
+cd D:\Wide_field_unreal_project
+git clone https://github.com/uw-loci/WideFieldAssembly.git
+cd WideFieldAssembly
+```
+
+### 3. Download the Git LFS Files
+
+Run:
+
+```bat
+git lfs pull
+```
+
+To verify that the large Unreal assets were downloaded correctly, run:
+
+```bat
+git lfs fsck
+```
+
+If no errors are reported, the project assets are ready.
+
+### 4. Open the Unreal Project
+
+1. Open the cloned `WideFieldAssembly` folder.
+2. Double-click the `.uproject` file.
+3. Select the required Unreal Engine version if prompted.
+4. Allow Unreal Engine to compile shaders, modules, or project files if needed.
 5. Open the main menu level.
-6. Click **Play** to run the application in the editor.
+6. Click **Play** to run the project in the Unreal Editor.
 
+### Troubleshooting: Map or Asset Files Will Not Open
+
+If Unreal Engine reports that a `.umap` file “appears to be an asset file,” the repository was probably downloaded as a ZIP without the real Git LFS objects. Delete that extracted folder and clone the repository again using the commands above.
+
+You can also try the following commands inside the cloned project folder:
+
+```bat
+git lfs fetch --all
+git lfs checkout
+git lfs pull
+```
 ### From a Packaged Build
 
 1. Download or extract the packaged project folder.
