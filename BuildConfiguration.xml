@@ -1,0 +1,8 @@
+EDIT FILE AT ~\AppData\Roaming\Unreal Engine\UnrealBuildTool
+
+<?xml version="1.0" encoding="utf-8" ?>
+<Configuration xmlns="https://www.unrealengine.com/BuildConfiguration">
+<WindowsPlatform>
+    <Compiler>VisualStudio2022</Compiler>
+  </WindowsPlatform>
+</Configuration>
