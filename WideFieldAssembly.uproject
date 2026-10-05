@@ -166,6 +166,13 @@
 				"Win64",
 				"Linux"
 			]
+		},
+		{
+			"Name": "SRDisplayPlugin",
+			"Enabled": true
 		}
+	],
+	"AdditionalPluginDirectories": [
+		"../srd-ue-plugin-5.6_2.6.0.01190/srd-ue-plugin-5.6"
 	]
 }

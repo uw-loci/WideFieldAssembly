@@ -1,0 +1,140 @@
+#include "/Engine/Private/Common.ush"
+
+/* PixelShader */
+
+Texture2D InTexture;
+SamplerState InTextureSampler;
+int Is9tap; //0(false) or 1(true)
+
+int IsShowCursor;
+int CursorHotSpotX;
+int CursorHotSpotY;
+int MousePositionX;
+int MousePositionY;
+int CursorImageW;
+int CursorImageH;
+int StructuredBufferSize;
+
+StructuredBuffer<uint> CursorData;
+
+float4 LowPassFilter_9tap(float2 inputPos)
+{
+	float4 l4 = InTexture[inputPos + int2(-4, 0)] * (-8.2844764696373547e-18);
+	float4 l3 = InTexture[inputPos + int2(-3, 0)] * (-6.9433820583776326e-02);
+	float4 l2 = InTexture[inputPos + int2(-2, 0)] * (+1.6568952939274709e-17);
+	float4 l1 = InTexture[inputPos + int2(-1, 0)] * (+3.1245219262699347e-01);
+	float4 c  = InTexture[inputPos + int2( 0, 0)] * (+5.1396325591356573e-01);
+	float4 r1 = InTexture[inputPos + int2( 1, 0)] * (+3.1245219262699347e-01);
+	float4 r2 = InTexture[inputPos + int2( 2, 0)] * (+1.6568952939274709e-17);
+	float4 r3 = InTexture[inputPos + int2( 3, 0)] * (-6.9433820583776326e-02);
+	float4 r4 = InTexture[inputPos + int2( 4, 0)] * (-8.2844764696373547e-18);
+
+	return l4 + l3 + l2 + l1 + c + r1 + r2 + r3 + r4;
+}
+
+float4 LowPassFilter_8tap(float2 inputPos)
+{
+	float4 l4 = InTexture[inputPos + int2(-4, 0)] * 0;
+	float4 l3 = InTexture[inputPos + int2(-3, 0)] * (-3.5322906942948783e-02);
+	float4 l2 = InTexture[inputPos + int2(-2, 0)] * (-6.9232897608179605e-02);
+	float4 l1 = InTexture[inputPos + int2(-1, 0)] * (+1.4078332945667019e-01);
+	float4 c  = InTexture[inputPos + int2( 0, 0)] * (+4.6377247509445824e-01);
+	float4 r1 = InTexture[inputPos + int2( 1, 0)] * (+4.6377247509445824e-01);
+	float4 r2 = InTexture[inputPos + int2( 2, 0)] * (+1.4078332945667019e-01);
+	float4 r3 = InTexture[inputPos + int2( 3, 0)] * (-6.9232897608179605e-02);
+	float4 r4 = InTexture[inputPos + int2( 4, 0)] * (-3.5322906942948783e-02);
+
+	return l4 + l3 + l2 + l1 + c + r1 + r2 + r3 + r4;
+}
+
+float4 DrawCursor(float2 inputPos, float uv_x, float4 p)
+{
+	int x = inputPos.x;
+	int y = inputPos.y;
+	int drawPosX;
+	int drawPosY;
+
+	if (uv_x > 0.5)
+	{
+		x = (x * (uv_x - 0.5)) / uv_x;
+	}
+	if (IsShowCursor == 0 || MousePositionX < 0 || MousePositionY < 0)
+	{
+		return p;
+	}
+	if (StructuredBufferSize >= 4096)
+	{
+
+	/* Color */	
+		drawPosX = MousePositionX - CursorHotSpotX;
+		drawPosY = MousePositionY - CursorHotSpotY;
+		if (x >= drawPosX && (x < drawPosX + CursorImageW) && y >= drawPosY && (y < drawPosY + CursorImageH))
+		{
+			x = x - drawPosX;
+			y = y - drawPosY;
+			float4 pp;
+			int a = CursorData[y * CursorImageW * 4 + x*4 + 3];
+			if (a == 0)
+			{
+				// do nothing.
+			}
+			else if (a == 255)
+			{
+				p  = float4(CursorData[y * CursorImageW * 4 + x*4 + 2],
+							CursorData[y * CursorImageW * 4 + x*4 + 1],
+							CursorData[y * CursorImageW * 4 + x*4],
+							a) / 255.0f;
+			}
+			else {
+				pp = float4(CursorData[y * CursorImageW * 4 + x*4 + 2],
+							CursorData[y * CursorImageW * 4 + x*4 + 1],
+							CursorData[y * CursorImageW * 4 + x*4],
+							a) / 255.0f;
+				p = p + ((pp - p) * a / 255.0f);
+			}
+		}
+	}
+	else {
+	/* Mono */
+		int x_offset = 0;
+		int xor_yoffset = 0;
+		int x_maskbit = 0;
+		int x_xorbit = 0;
+		drawPosX = MousePositionX - CursorHotSpotX;
+		drawPosY = MousePositionY - CursorHotSpotY;
+		if (x >= drawPosX && (x < drawPosX + CursorImageW) && y >= drawPosY && (y < drawPosY + CursorImageH / 2))
+		{
+			x = x - drawPosX;
+			y = y - drawPosY;
+			drawPosY = StructuredBufferSize / CursorImageH;
+			xor_yoffset = drawPosY * CursorImageH / 2;
+			drawPosX = x / 8;
+			drawPosY = drawPosY * y;
+			x_offset = x % 8;
+			x_maskbit = (CursorData[drawPosY + drawPosX] >> (7 - x_offset)) & 0x01;
+			x_xorbit = (CursorData[xor_yoffset + drawPosY + drawPosX] >> (7 - x_offset)) & 0x01;
+			if (!x_maskbit) {
+				if (!x_xorbit) p = float4(0, 0, 0, 0);
+				if (x_xorbit) p = float4(255, 255, 255, 0);
+			}
+		}
+	}
+	return p;
+}
+
+float4 MainPS(FScreenVertexOutput Input) : SV_Target
+{
+	float2 input_pos = Input.Position.xy;
+	float4 ret;
+	int viewWidth;
+
+	if (Is9tap == 1)
+	{
+		ret = LowPassFilter_9tap(input_pos);
+	}
+	else
+	{
+		ret = LowPassFilter_8tap(input_pos);
+	}
+	return DrawCursor(input_pos, Input.UV.x, ret);
+}
